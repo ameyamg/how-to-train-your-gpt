@@ -37,7 +37,6 @@ class RotaryPositionalEmbedding(nn.Module):
         self.register_buffer("sin_cached", emb.sin())
 
     @staticmethod
-    @staticmethod
     def rotate_half(x):
         x_even = x[..., 0::2]
         x_odd  = x[..., 1::2]

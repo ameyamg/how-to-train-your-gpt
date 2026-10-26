@@ -21,6 +21,18 @@ But the Transformer reads all words **at once** (not one by one like humans do).
 
 ## Modern Approach: Rotary Position Embeddings (RoPE)
 
+### A Quick Word on "Query" and "Key" Vectors
+
+RoPE acts on two vectors you haven't met yet: the **query** and the **key**. They belong to attention, which is the whole of [Chapter 5](05_attention.md). Here is all you need for now:
+
+- Inside attention, every token's embedding gets turned into a **query** vector ("what am I looking for?") and a **key** vector ("what do I have to offer?").
+- Attention compares a query with a key by taking their **dot product**. A big result means "pay attention to this token".
+- RoPE rotates the query and key vectors **right before** that dot product, so the result also depends on how far apart the two tokens are.
+
+So for this chapter, treat Q and K as "two vectors that get compared with a dot product". Chapter 5 builds them step by step.
+
+### The Idea
+
 Instead of **adding** position numbers to embeddings, RoPE **rotates** the query and key vectors by an angle that depends on position.
 
 ### The Math Intuition
@@ -31,7 +43,7 @@ x' = x*cos(θ) - y*sin(θ)
 y' = x*sin(θ) + y*cos(θ)
 ```
 
-RoPE does this for EVERY pair of dimensions in the query and key vectors. The rotation angle for position `p` and dimension pair `2i, 2i+1` is:
+RoPE splits each query and key vector into **adjacent, non-overlapping pairs** of dimensions: `(0,1)`, `(2,3)`, `(4,5)`, ... and rotates each pair as if it were its own little 2D vector. A vector with `d_model=4` has exactly two pairs: `(0,1)` and `(2,3)`. It is NOT every possible combination of two dimensions. The rotation angle for position `p` and pair `i` (dimensions `2i, 2i+1`) is:
 
 ```
 θ(p, i) = p / (10000^(2i/d_model))
@@ -207,10 +219,27 @@ class RotaryPositionalEmbedding(nn.Module):
         self.register_buffer("sin_cached", emb.sin())   # sin of each angle
 
     @staticmethod
-    @staticmethod
-    def rotate_half(x):
-        x_even = x[..., 0::2]
-        x_odd  = x[..., 1::2]
+    def rotate_half(x: torch.Tensor) -> torch.Tensor:
+        """
+        WHAT: Prepare a vector for the rotation formula.
+        WHY:  The rotation formula is: x' = x*cos + rotate_half(x)*sin
+
+              For vector [x0, x1, x2, x3, x4, x5]:
+              rotate_half returns [-x1, x0, -x3, x2, -x5, x4]
+
+              Why this works: For pair (x0, x1) rotated by angle θ:
+                x0' = x0*cos(θ) - x1*sin(θ)   ← matches: x0*cos + (-x1)*sin
+                x1' = x0*sin(θ) + x1*cos(θ)   ← matches: x1*cos + (x0)*sin
+
+              So executing (x*cos + rotate_half(x)*sin) rotates every
+              adjacent pair at once — no loop needed!
+        """
+        x_even = x[..., 0::2]   # dims 0, 2, 4, ... — the "x" of each pair
+        x_odd  = x[..., 1::2]   # dims 1, 3, 5, ... — the "y" of each pair
+
+        # WHAT: Interleave back into [-x1, x0, -x3, x2, ...]
+        # WHY: The cos/sin caches are stored as [θ0, θ0, θ1, θ1, ...],
+        #      so each pair must stay next to its own angle.
         return torch.stack([-x_odd, x_even], dim=-1).flatten(-2)
 
     def forward(self, x: torch.Tensor, seq_len: int) -> torch.Tensor:

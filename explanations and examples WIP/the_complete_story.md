@@ -272,8 +272,9 @@ x₀' = x₀ × cos(θ_p) - x₁ × sin(θ_p)
 x₁' = x₀ × sin(θ_p) + x₁ × cos(θ_p)
 ```
 
-This is a standard 2D rotation. Applied to every pair of dimensions in
-the query and key vectors. The values are not rotated because position
+This is a standard 2D rotation. Applied to every adjacent pair of
+dimensions (x₀, x₁), (x₂, x₃), (x₄, x₅) and so on in the query and key
+vectors. The values are not rotated because position
 information is only needed for deciding WHICH tokens to attend to not
 for the content of the tokens themselves.
 
